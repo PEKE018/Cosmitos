@@ -1,62 +1,55 @@
-# Carrito y cálculo de envío
+# Carrito, envío y pedidos
 
 ## Funcionamiento actual
 
-- Los productos con precio publicado tienen un botón **Agregar al carrito**. El pack de clips de ajuste de la página Combos también se puede agregar.
-- El carrito conserva productos y cantidades en `localStorage` del navegador. Se pueden aumentar o disminuir unidades, quitar artículos y vaciar el carrito.
-- El formulario solicita datos de contacto y entrega en Argentina. Acepta el CP tradicional de cuatro dígitos y el CPA alfanumérico.
-- Con un CP válido, calcula el subtotal y suma una tarifa fija de envío de **$2.000 ARS**. El origen configurado es **Laborde, Córdoba (CP 2657)**.
-- **No se conecta a un correo, no confirma ni envía pedidos y no cobra.** El botón final genera un resumen visible en la misma página. La tarifa es la regla fija elegida para esta versión, no una cotización oficial de un transportista.
-- Los productos de Más vendidos que no tienen un precio publicado todavía no se pueden agregar; no se les asignó un precio supuesto.
+- Los productos con precio tienen el botón **Agregar al carrito** (confirma con "Agregado ✓"). Los que no tienen precio (Más vendidos) muestran **Consultar por WhatsApp**.
+- El carrito se guarda en `localStorage` (clave `cosmo-cart-v2`) y el ícono del encabezado muestra la cantidad en todos los tamaños de pantalla.
+- Envío: **$2.000 fijos a todo el país** y **gratis desde $50.000** de subtotal. Ambos valores se editan en `src/data/shipping.ts`. El carrito muestra cuánto falta para el envío gratis.
+- El formulario pide datos de entrega en Argentina (CP de 4 dígitos o CPA alfanumérico).
+- **Pedido:** "Generar resumen del pedido" muestra el resumen y habilita **Enviar pedido por WhatsApp** (abre `wa.me` con el pedido y los datos de entrega escritos) y **Copiar resumen**. El pedido no queda confirmado hasta que Cosmo responda; no se cobra nada en el sitio.
 
-## Cambiar el origen o la tarifa fija
+## Datos de contacto y WhatsApp
 
-Editá `src/data/shipping.ts`:
+Todo está en `src/data/contact.ts`: número de WhatsApp (formato internacional sin `+`, por ejemplo `5493537590606`), Instagram, email y horario. Se usan en Contacto, el pie de página, Envíos y el pedido.
+
+## Cambiar la tarifa o el umbral de envío gratis
 
 ```ts
+// src/data/shipping.ts
 export const shippingSettings = {
   originPostalCode: '2657',
   flatRate: 2000,
+  freeShippingFrom: 50000,
 } as const;
 ```
 
-`flatRate` se expresa en pesos argentinos como un número entero, sin separadores. Por ejemplo, para fijar el envío en $3.500, cambiá el valor a `3500`. La tarifa se aplica a todos los CP válidos mientras el modelo siga siendo fijo.
+Los importes son pesos enteros, sin separadores.
 
-## Agregar un producto al carrito
+## Agregar o editar un producto
 
-En `src/data/site.ts`, cada producto necesita nombre, imagen y precio:
+En `src/data/site.ts`, cada producto necesita `id` único y estable (el carrito lo usa), nombre, imagen y, si se vende online, `price` como número:
 
 ```ts
 {
+  id: 'nombre-del-producto',
   name: 'Nombre del producto',
-  image: 'archivo-de-imagen.jpg',
+  image: 'archivo.webp',
   details: ['Detalle'],
-  price: '$12,500',
+  price: 12500,
 }
 ```
 
-Las tarjetas muestran el botón de carrito cuando hay un precio válido. El precio se interpreta en pesos enteros; por ejemplo, `$12,500` se convierte a `12500`.
+Sin `price`, la tarjeta muestra "Consultar por WhatsApp". Las fotos van en `public/assets/photos/`; conviene subirlas en WebP, de hasta 900 px de lado.
 
-## Configurar tarifas reales por CP o zona
+## Cobrar online o cotizar con el correo
 
-Antes de reemplazar la tarifa fija, reuní el tarifario vigente del correo y confirmá qué cubre: CP/rangos o zonas, servicio elegido, peso y dimensiones del paquete, recargos y condiciones de envío gratis. El origen de despacho configurado es CP 2657.
-
-Luego:
-
-1. Reemplazá el cálculo fijo de `src/data/shipping.ts` por una función tipada que reciba el destino y los datos del paquete y devuelva una cotización o un error explícito.
-2. En `src/pages/CartPage.tsx`, solicitá esa cotización al cambiar el CP y presentá su estado (calculando, disponible o error). No muestres el total como definitivo si la cotización falló o venció.
-3. Si el correo ofrece una API, no pongas claves privadas en React ni en variables `VITE_*`: esas variables son visibles desde el navegador. La consulta autenticada requiere un backend o una función serverless que proteja las credenciales.
-4. Verificá en el servicio de checkout/pedidos que se recalculen precios y envío del lado del servidor antes de cobrar o confirmar. El navegador no es una fuente confiable para esos importes.
-
-## Activar envío de pedidos o pagos
-
-El resumen actual es local y no se transmite. Para aceptar pedidos, conectá el botón a un destino definido (por ejemplo, un backend o servicio de pedidos) y acordá qué datos se envían y cómo se gestionan la privacidad y los errores. Para cobrar, integrá una pasarela mediante su flujo oficial y validá el importe en servidor. No cambies el mensaje de resumen por uno de compra confirmada hasta que el servicio responda que la operación fue exitosa.
+Hoy el cobro se coordina por WhatsApp. Para cobrar en el sitio o usar tarifas reales por CP hace falta un backend o una función serverless (las claves de pasarelas y correos no pueden ir en React ni en variables `VITE_*`) y recalcular precios y envío del lado del servidor antes de confirmar.
 
 ## Comprobaciones manuales
 
-1. Agregá un producto y comprobá que aparece en el carrito; recargá y verificá que se conserva.
-2. Cambiá la cantidad y quitá un artículo; confirmá que se actualiza el subtotal.
-3. Probá un CP de cuatro dígitos (`2657`) y un CPA (`C1000ABC`): el envío debe ser $2.000 y el total, subtotal + envío.
-4. Probá un CP incompleto: no debe habilitarse un resumen con cotización válida.
-5. Completá los datos y generá el resumen; verificá dirección, líneas de productos y total. El pedido debe permanecer sin enviar ni cobrar.
-6. Probá el formulario a ancho móvil y de escritorio.
+1. Agregá productos desde el celular: el contador del encabezado se actualiza sin abrir el menú.
+2. Cambiá cantidades y quitá un artículo; recargá y verificá que el carrito se conserva.
+3. Probá CP `2657` y `C1000ABC` (válidos) y `26` (inválido, no debe permitir el resumen).
+4. Con subtotal desde $50.000 el envío debe figurar como "Gratis".
+5. Generá el resumen y verificá que el mensaje de WhatsApp tenga productos, total y dirección.
+6. "Vaciar carrito" pide una segunda confirmación.

@@ -1,8 +1,8 @@
 # Cosmo Accesorios
 
-Reconstrucción estática del sitio de Canva con React, TypeScript y Vite. El proyecto no incluye backend ni una función de compra.
+Reconstrucción del sitio de Canva con React, TypeScript y Vite. No tiene backend: el carrito vive en el navegador y el pedido se envía por WhatsApp.
 
-El carrito de navegador y el formulario de entrega permiten preparar un resumen, con una tarifa fija de envío de $2.000 ARS por CP válido (origen: Laborde, Córdoba, CP 2657). No se envían pedidos ni se procesan pagos. Para cambiar las tarifas, conectar un correo o habilitar pedidos, consulta [CARRITO-Y-ENVIOS.md](./CARRITO-Y-ENVIOS.md).
+El carrito calcula el subtotal y el envío (tarifa fija de $2.000 ARS a todo el país, gratis desde $50.000; origen: Laborde, Córdoba, CP 2657). Al generar el resumen se abre WhatsApp con el pedido ya escrito. No se procesan pagos. Para cambiar tarifas, productos o el número de WhatsApp, consultá [CARRITO-Y-ENVIOS.md](./CARRITO-Y-ENVIOS.md). Los cambios de esta versión están en [MEJORAS.md](./MEJORAS.md).
 
 ## Desarrollo local
 
