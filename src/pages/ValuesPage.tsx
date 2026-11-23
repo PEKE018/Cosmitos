@@ -1,18 +1,20 @@
-import { brandPromises } from '../data/site';
 import { asset } from '../data/assets';
+import { brandPromises } from '../data/site';
 
 export default function ValuesPage() {
   return (
-    <main className="page values-page">
-      <h1>Lo que nos define</h1>
-      <div className="values-grid">
+    <div className="page values-page">
+      <header className="page-head">
+        <h1>Lo que nos define</h1>
+      </header>
+      <div className="container values-grid">
         {brandPromises.map((promise) => (
           <article className="value-card" key={promise.title}>
             <img src={asset(`icons/${promise.icon}`)} alt="" loading="lazy" />
-            <p>{promise.title}</p>
+            <h2>{promise.title}</h2>
           </article>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

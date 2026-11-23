@@ -1,21 +1,21 @@
-import { reviews } from '../data/site';
 import { asset } from '../data/assets';
+import { reviews } from '../data/site';
 
 export default function ClientsPage() {
   return (
-    <main className="page clients-page">
-      <h1>Client Reviews</h1>
-      <div className="reviews-list">
+    <div className="page clients-page">
+      <header className="page-head">
+        <h1>Opiniones de clientes</h1>
+      </header>
+      <div className="container reviews-list">
         {reviews.map((review) => (
-          <article className="review" key={review.name}>
+          <figure className="review" key={review.name}>
             <img src={asset(`photos/${review.image}`)} alt="" loading="lazy" />
-            <div>
-              <h2>{review.name}</h2>
-              <p>{review.quote}</p>
-            </div>
-          </article>
+            <blockquote>{review.quote}</blockquote>
+            <figcaption>{review.name}</figcaption>
+          </figure>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

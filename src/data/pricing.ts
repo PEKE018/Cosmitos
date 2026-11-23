@@ -7,23 +7,11 @@ export type CartProduct = {
   unitPrice: number;
 };
 
-export function parsePrice(price?: string): number | undefined {
-  if (!price) return undefined;
-
-  const amount = Number(price.replace(/\D/g, ''));
-  return Number.isSafeInteger(amount) && amount > 0 ? amount : undefined;
-}
-
 export function toCartProduct(product: SiteProduct): CartProduct | null {
-  const unitPrice = parsePrice(product.price);
-  if (!unitPrice) return null;
+  const { price } = product;
+  if (!price || !Number.isSafeInteger(price) || price <= 0) return null;
 
-  return {
-    id: `${product.name}::${product.image}`,
-    name: product.name,
-    image: product.image,
-    unitPrice,
-  };
+  return { id: product.id, name: product.name, image: product.image, unitPrice: price };
 }
 
 export function formatCurrency(amount: number): string {

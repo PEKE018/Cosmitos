@@ -1,11 +1,13 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart, type CartItem } from '../context/CartContext';
 import { asset } from '../data/assets';
+import { whatsappUrl } from '../data/contact';
 import { formatCurrency } from '../data/pricing';
 import {
   isValidArgentinePostalCode,
   normalizePostalCode,
+  shippingCost,
   shippingSettings,
 } from '../data/shipping';
 
@@ -56,20 +58,70 @@ const provinces = [
   'Tucumán',
 ];
 
+function buildOrderMessage(order: OrderSummary): string {
+  const { customer } = order;
+  const apartment = customer.apartment ? ` (${customer.apartment})` : '';
+
+  return [
+    'Hola Cosmo! Quiero hacer este pedido:',
+    '',
+    ...order.items.map(
+      (item) => `• ${item.name} × ${item.quantity} — ${formatCurrency(item.unitPrice * item.quantity)}`,
+    ),
+    '',
+    `Subtotal: ${formatCurrency(order.subtotal)}`,
+    `Envío: ${order.shipping === 0 ? 'Gratis' : formatCurrency(order.shipping)}`,
+    `Total: ${formatCurrency(order.total)}`,
+    '',
+    'Datos de entrega:',
+    customer.name,
+    `${customer.street} ${customer.streetNumber}${apartment}`,
+    `${customer.city}, ${customer.province} — CP ${customer.postalCode}`,
+    `Tel: ${customer.phone}`,
+    `Email: ${customer.email}`,
+  ].join('\n');
+}
+
 export default function CartPage() {
   const { items, itemCount, storageError, removeItem, setQuantity, clearCart } =
     useCart();
   const [postalCode, setPostalCode] = useState('');
   const [postalError, setPostalError] = useState('');
   const [summary, setSummary] = useState<OrderSummary | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [copied, setCopied] = useState(false);
   const postalCodeInput = useRef<HTMLInputElement>(null);
+  const summaryRef = useRef<HTMLElement>(null);
 
   const subtotal = items.reduce(
     (total, item) => total + item.unitPrice * item.quantity,
     0,
   );
   const validPostalCode = isValidArgentinePostalCode(postalCode);
-  const shipping = validPostalCode ? shippingSettings.flatRate : null;
+  const shipping = validPostalCode ? shippingCost(subtotal) : null;
+  const missingForFreeShipping = Math.max(0, shippingSettings.freeShippingFrom - subtotal);
+  const freeShippingProgress = Math.min(100, (subtotal / shippingSettings.freeShippingFrom) * 100);
+
+  useEffect(() => {
+    if (summary) summaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [summary]);
+
+  useEffect(() => {
+    if (!confirmClear) return;
+    const timer = window.setTimeout(() => setConfirmClear(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [confirmClear]);
+
+  async function copySummary() {
+    if (!summary) return;
+    try {
+      await navigator.clipboard.writeText(buildOrderMessage(summary));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   function handlePostalCodeChange(value: string) {
     const normalized = normalizePostalCode(value);
@@ -112,21 +164,21 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <main className="page cart-page">
+      <div className="page cart-page">
         <header className="cart-heading">
           <h1>Tu carrito</h1>
           <p>Tu carrito está vacío.</p>
         </header>
         {storageError && <p className="cart-storage-error" role="alert">{storageError}</p>}
-        <Link className="cart-continue-link" to="/precios">
+        <Link className="btn btn--primary cart-continue-link" to="/hechos-para-ti">
           Explorar productos
         </Link>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="page cart-page">
+    <div className="page cart-page">
       <header className="cart-heading">
         <h1>Tu carrito</h1>
         <p>{itemCount} {itemCount === 1 ? 'producto' : 'productos'}</p>
@@ -136,6 +188,16 @@ export default function CartPage() {
 
       <div className="cart-layout">
         <section className="cart-items" aria-label="Productos en el carrito">
+          <div className="free-shipping">
+            <p>
+              {missingForFreeShipping > 0
+                ? `Te faltan ${formatCurrency(missingForFreeShipping)} para el envío gratis.`
+                : '¡Tenés envío gratis!'}
+            </p>
+            <div className="free-shipping__bar" aria-hidden="true">
+              <span style={{ width: `${freeShippingProgress}%` }} />
+            </div>
+          </div>
           {items.map((item) => (
             <article className="cart-item" key={item.id}>
               <img src={asset(`photos/${item.image}`)} alt="" />
@@ -191,9 +253,17 @@ export default function CartPage() {
           <button
             className="cart-clear-button"
             type="button"
-            onClick={clearCart}
+            onClick={() => {
+              if (!confirmClear) {
+                setConfirmClear(true);
+                return;
+              }
+              clearCart();
+              setConfirmClear(false);
+              setSummary(null);
+            }}
           >
-            Vaciar carrito
+            {confirmClear ? '¿Seguro? Tocá de nuevo para vaciar' : 'Vaciar carrito'}
           </button>
         </section>
 
@@ -272,7 +342,9 @@ export default function CartPage() {
             >
               {postalError ||
                 (validPostalCode
-                  ? `Envío configurado: ${formatCurrency(shippingSettings.flatRate)}`
+                  ? shipping === 0
+                    ? 'Envío gratis en este pedido.'
+                    : `Envío a todo el país: ${formatCurrency(shippingSettings.flatRate)}`
                   : 'Ingresá tu CP para calcular el envío.')}
             </p>
 
@@ -280,7 +352,7 @@ export default function CartPage() {
               <p><span>Subtotal</span><strong>{formatCurrency(subtotal)}</strong></p>
               <p>
                 <span>Envío</span>
-                <strong>{shipping === null ? 'A calcular' : formatCurrency(shipping)}</strong>
+                <strong>{shipping === null ? 'A calcular' : shipping === 0 ? 'Gratis' : formatCurrency(shipping)}</strong>
               </p>
               <p className="cart-totals__grand">
                 <span>Total</span>
@@ -293,19 +365,20 @@ export default function CartPage() {
             </div>
 
             <p className="shipping-rate-notice">
-              El envío usa la tarifa fija configurada de {formatCurrency(shippingSettings.flatRate)}
-              {' '}para todos los destinos; no consulta tarifas de un correo.
+              El envío tiene una tarifa fija de {formatCurrency(shippingSettings.flatRate)} a todo el país
+              {' '}y es gratis desde {formatCurrency(shippingSettings.freeShippingFrom)}.
             </p>
-            <button className="order-summary-button" type="submit">
+            <button className="btn btn--primary" type="submit">
               Generar resumen del pedido
             </button>
           </form>
 
           {summary && (
-            <section className="order-summary" aria-live="polite">
+            <section className="order-summary" aria-live="polite" ref={summaryRef} tabIndex={-1}>
               <h2>Resumen del pedido</h2>
               <p className="order-summary__notice">
-                Este resumen queda en esta página: no envía el pedido ni procesa un pago.
+                Revisá los datos y enviá el pedido por WhatsApp: se abre la conversación con el pedido
+                ya escrito. El pedido no queda confirmado hasta que Cosmo te responda.
               </p>
               <ul>
                 {summary.items.map((item) => (
@@ -317,7 +390,7 @@ export default function CartPage() {
               </ul>
               <dl>
                 <div><dt>Subtotal</dt><dd>{formatCurrency(summary.subtotal)}</dd></div>
-                <div><dt>Envío</dt><dd>{formatCurrency(summary.shipping)}</dd></div>
+                <div><dt>Envío</dt><dd>{summary.shipping === 0 ? 'Gratis' : formatCurrency(summary.shipping)}</dd></div>
                 <div className="order-summary__total">
                   <dt>Total</dt><dd>{formatCurrency(summary.total)}</dd>
                 </div>
@@ -332,14 +405,27 @@ export default function CartPage() {
                 {summary.customer.phone}<br />
                 {summary.customer.email}
               </address>
+              <div className="order-actions">
+                <a
+                  className="btn btn--primary"
+                  href={whatsappUrl(buildOrderMessage(summary))}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Enviar pedido por WhatsApp
+                </a>
+                <button className="btn btn--ghost" type="button" onClick={copySummary}>
+                  {copied ? 'Copiado ✓' : 'Copiar resumen'}
+                </button>
+              </div>
             </section>
           )}
         </section>
       </div>
 
-      <Link className="cart-continue-link" to="/precios">
+      <Link className="cart-continue-link" to="/hechos-para-ti">
         Seguir viendo productos
       </Link>
-    </main>
+    </div>
   );
 }

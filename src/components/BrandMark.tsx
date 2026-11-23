@@ -2,15 +2,15 @@ import { asset } from '../data/assets';
 
 type BrandMarkProps = {
   className?: string;
-  large?: boolean;
 };
 
-export default function BrandMark({ className = '', large = false }: BrandMarkProps) {
+/** Logo de Cosmo (letras blancas): usarlo sobre fondos oscuros, como la banda taupe. */
+export default function BrandMark({ className = '' }: BrandMarkProps) {
   return (
     <img
-      className={`brand-mark${large ? ' brand-mark--large' : ''} ${className}`.trim()}
-      src={asset('photos/45709013a5162fe97071992f39d06d9c.png')}
-      alt="Cosmo"
+      className={`brand-mark ${className}`.trim()}
+      src={asset('photos/5b8b4a38cd132157fbb3b76bc7ad4e4c.png')}
+      alt="Cosmo Accesorios"
     />
   );
 }

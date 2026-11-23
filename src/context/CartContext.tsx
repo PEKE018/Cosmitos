@@ -21,7 +21,7 @@ type CartContextValue = {
   clearCart: () => void;
 };
 
-const storageKey = 'cosmo-cart-v1';
+const storageKey = 'cosmo-cart-v2';
 const CartContext = createContext<CartContextValue | null>(null);
 
 function isCartItem(value: unknown): value is CartItem {

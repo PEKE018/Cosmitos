@@ -1,39 +1,56 @@
 import { Link } from 'react-router-dom';
 import { asset } from '../data/assets';
+import { contact, whatsappUrl } from '../data/contact';
 
 export default function ContactPage() {
   return (
-    <main className="page contact-page">
-      <h1>Contáctanos</h1>
-      <div className="contact-details">
-        <section>
-          <a href="https://www.instagram.com/cosmo.street/" target="_blank" rel="noreferrer">
-            @COSMO.STREET
-          </a>
-          <p>Instagram</p>
-        </section>
-        <section>
-          <p>HELLO@COSMO.COM</p>
-          <p>Email</p>
-        </section>
-        <section>
-          <p>(+54 9) 3537590606</p>
-          <p>Numero de telefono</p>
-        </section>
-        <section className="contact-hours">
-          <p>LUNES A VIERNES · 9 A 18 HS</p>
-          <p>Atencion personalizada</p>
-        </section>
+    <div className="page contact-page">
+      <header className="page-head">
+        <h1>Contactanos</h1>
+        <p>Atención personalizada, de persona a persona.</p>
+      </header>
+      <div className="container contact-layout">
+        <dl className="contact-list">
+          <div>
+            <dt>WhatsApp</dt>
+            <dd>
+              <a href={whatsappUrl('Hola Cosmo!')} target="_blank" rel="noreferrer">
+                {contact.phoneLabel}
+              </a>
+            </dd>
+          </div>
+          <div>
+            <dt>Instagram</dt>
+            <dd>
+              <a href={contact.instagramUrl} target="_blank" rel="noreferrer">
+                @{contact.instagramHandle}
+              </a>
+            </dd>
+          </div>
+          <div>
+            <dt>Email</dt>
+            <dd>
+              <a href={`mailto:${contact.email}`}>{contact.email}</a>
+            </dd>
+          </div>
+          <div>
+            <dt>Horario de atención</dt>
+            <dd>{contact.hours}</dd>
+          </div>
+          <div>
+            <dt>¿Tenés dudas?</dt>
+            <dd>
+              <Link to="/preguntas-frecuentes">Mirá las preguntas frecuentes</Link>
+            </dd>
+          </div>
+        </dl>
+        <img
+          className="contact-photo"
+          src={asset('photos/e4ab176a233cadd0fa278c394b58ce53.webp')}
+          alt="Detalle de aros dorados"
+          loading="lazy"
+        />
       </div>
-      <Link className="contact-faq" to="/preguntas-frecuentes" aria-label="Preguntas frecuentes">
-        <img src={asset('icons/contact-01.svg')} alt="FAQ" />
-      </Link>
-      <img
-        className="contact-editorial"
-        src={asset('photos/e4ab176a233cadd0fa278c394b58ce53.jpg')}
-        alt="Detalle de aros dorados"
-        loading="lazy"
-      />
-    </main>
+    </div>
   );
 }
