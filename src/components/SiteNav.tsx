@@ -50,6 +50,12 @@ export default function SiteNav() {
         </nav>
 
         <div className="site-header__actions">
+          <Link className="cart-link" to="/hechos-para-ti?buscar" aria-label="Buscar productos">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+          </Link>
           <NavLink
             className="cart-link"
             to="/carrito"

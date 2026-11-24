@@ -12,12 +12,12 @@ export default function BestSellersPage() {
       />
       <header className="page-head">
         <h1>Más vendidos</h1>
-        <p>Los favoritos de Cosmo. Escribinos para consultar precio y disponibilidad.</p>
+        <p>Los favoritos de Cosmo.</p>
       </header>
       <div className="container">
         <div className="product-grid product-grid--four">
-          {bestSellers.map((product) => (
-            <ProductCard key={product.id} product={product} />
+          {bestSellers.map((product, index) => (
+            <ProductCard key={product.id} product={product} index={index} />
           ))}
         </div>
       </div>

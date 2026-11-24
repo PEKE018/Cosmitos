@@ -1,14 +1,15 @@
+import { Link } from 'react-router-dom';
 import { asset } from '../data/assets';
-import { contact, whatsappUrl } from '../data/contact';
+import { contact } from '../data/contact';
 import { formatCurrency } from '../data/pricing';
-import { shippingSettings } from '../data/shipping';
+import { countries, shippingSettings } from '../data/shipping';
 
 const returnPoints = [
   { icon: 'shipping-02.svg', text: 'Tenés 30 días para devolver tu pedido' },
   { icon: 'shipping-03.svg', text: 'El producto debe estar sin uso y en su paquete original' },
   { icon: 'shipping-04.svg', text: 'La devolución de la compra la pagamos nosotros' },
   { icon: 'shipping-05.svg', text: 'Te devolvemos el dinero en 5 días hábiles' },
-  { icon: 'shipping-06.svg', text: 'Contactanos por WhatsApp o mail para gestionarlo' },
+  { icon: 'shipping-06.svg', text: 'Pedila con el formulario de devolución y tu número de pedido' },
 ];
 
 export default function ShippingPage() {
@@ -25,8 +26,14 @@ export default function ShippingPage() {
           <ul className="info-list">
             <li>Enviamos a todo el país, tu pedido llega en 3 a 7 días hábiles.</li>
             <li>
-              Tarifa fija de {formatCurrency(shippingSettings.flatRate)} a todo el país.{' '}
-              <strong>Envío gratis desde {formatCurrency(shippingSettings.freeShippingFrom)}.</strong>
+              El costo depende del destino y del peso del paquete: lo ves en el carrito al elegir tu
+              provincia y código postal.{' '}
+              <strong>Envío gratis en Argentina desde {formatCurrency(shippingSettings.freeShippingFrom)}.</strong>
+            </li>
+            <li>
+              También enviamos a {countries.length - 1} países. El costo depende de la región e
+              incluye solo el transporte: impuestos y aranceles de aduana corren por cuenta del
+              destinatario.
             </li>
             <li>Te enviamos el número de seguimiento para que sepas dónde está tu pedido.</li>
           </ul>
@@ -49,14 +56,9 @@ export default function ShippingPage() {
         <div className="cta-band">
           <p>¿Necesitás gestionar una devolución?</p>
           <div className="cta-band__actions">
-            <a
-              className="btn btn--light"
-              href={whatsappUrl('Hola Cosmo! Quiero gestionar una devolución de mi pedido.')}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Escribir por WhatsApp
-            </a>
+            <Link className="btn btn--light" to="/devoluciones">
+              Pedir una devolución
+            </Link>
             <a className="btn btn--outline-light" href={`mailto:${contact.email}`}>
               Enviar un mail
             </a>

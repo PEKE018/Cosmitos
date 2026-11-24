@@ -12,6 +12,7 @@ import FaqPage from './pages/FaqPage';
 import HechosParaTiPage from './pages/HechosParaTiPage';
 import HomePage from './pages/HomePage';
 import IntroPage from './pages/IntroPage';
+import ReturnsPage from './pages/ReturnsPage';
 import ShippingPage from './pages/ShippingPage';
 import ValuesPage from './pages/ValuesPage';
 
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/lo-que-nos-define" element={<ValuesPage />} />
           <Route path="/clientes" element={<ClientsPage />} />
           <Route path="/contactos" element={<ContactPage />} />
+          <Route path="/devoluciones" element={<ReturnsPage />} />
           <Route path="/carrito" element={<CartPage />} />
           {/* Rutas anteriores: se mantienen para que los links ya compartidos sigan funcionando */}
           <Route path="/precios" element={<Navigate to="/hechos-para-ti" replace />} />

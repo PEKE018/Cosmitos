@@ -1,69 +1,31 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { useCart, type CartItem } from '../context/CartContext';
+import { useCart } from '../context/CartContext';
 import { asset } from '../data/assets';
 import { whatsappUrl } from '../data/contact';
+import { generateOrderNumber, saveOrder, type StoredOrder } from '../data/orders';
 import { formatCurrency } from '../data/pricing';
 import {
-  isValidArgentinePostalCode,
+  calculateShipping,
+  countries,
+  isValidPostalCode,
   normalizePostalCode,
-  shippingCost,
+  parcelWeight,
+  provinces,
   shippingSettings,
 } from '../data/shipping';
 
-type CustomerDetails = {
-  name: string;
-  email: string;
-  phone: string;
-  street: string;
-  streetNumber: string;
-  apartment: string;
-  city: string;
-  province: string;
-  postalCode: string;
-};
+function countryName(code: string): string {
+  return countries.find((country) => country.code === code)?.name ?? code;
+}
 
-type OrderSummary = {
-  customer: CustomerDetails;
-  items: CartItem[];
-  subtotal: number;
-  shipping: number;
-  total: number;
-};
-
-const provinces = [
-  'Buenos Aires',
-  'Catamarca',
-  'Chaco',
-  'Chubut',
-  'Ciudad Autónoma de Buenos Aires',
-  'Córdoba',
-  'Corrientes',
-  'Entre Ríos',
-  'Formosa',
-  'Jujuy',
-  'La Pampa',
-  'La Rioja',
-  'Mendoza',
-  'Misiones',
-  'Neuquén',
-  'Río Negro',
-  'Salta',
-  'San Juan',
-  'San Luis',
-  'Santa Cruz',
-  'Santa Fe',
-  'Santiago del Estero',
-  'Tierra del Fuego',
-  'Tucumán',
-];
-
-function buildOrderMessage(order: OrderSummary): string {
+function buildOrderMessage(order: StoredOrder): string {
   const { customer } = order;
   const apartment = customer.apartment ? ` (${customer.apartment})` : '';
+  const international = customer.countryCode !== 'AR';
 
   return [
-    'Hola Cosmo! Quiero hacer este pedido:',
+    `Hola Cosmo! Quiero hacer este pedido (${order.number}):`,
     '',
     ...order.items.map(
       (item) => `• ${item.name} × ${item.quantity} — ${formatCurrency(item.unitPrice * item.quantity)}`,
@@ -76,29 +38,39 @@ function buildOrderMessage(order: OrderSummary): string {
     'Datos de entrega:',
     customer.name,
     `${customer.street} ${customer.streetNumber}${apartment}`,
-    `${customer.city}, ${customer.province} — CP ${customer.postalCode}`,
+    `${customer.city}, ${customer.province} — CP ${customer.postalCode}${international ? ` — ${countryName(customer.countryCode)}` : ''}`,
     `Tel: ${customer.phone}`,
     `Email: ${customer.email}`,
   ].join('\n');
 }
 
 export default function CartPage() {
-  const { items, itemCount, storageError, removeItem, setQuantity, clearCart } =
-    useCart();
+  const { items, itemCount, storageError, removeItem, setQuantity, clearCart } = useCart();
+  const [country, setCountry] = useState('AR');
+  const [province, setProvince] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [postalError, setPostalError] = useState('');
-  const [summary, setSummary] = useState<OrderSummary | null>(null);
+  const [formError, setFormError] = useState('');
+  const [summary, setSummary] = useState<StoredOrder | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [copied, setCopied] = useState(false);
   const postalCodeInput = useRef<HTMLInputElement>(null);
   const summaryRef = useRef<HTMLElement>(null);
 
-  const subtotal = items.reduce(
-    (total, item) => total + item.unitPrice * item.quantity,
-    0,
-  );
-  const validPostalCode = isValidArgentinePostalCode(postalCode);
-  const shipping = validPostalCode ? shippingCost(subtotal) : null;
+  const isArgentina = country === 'AR';
+  const subtotal = items.reduce((total, item) => total + item.unitPrice * item.quantity, 0);
+  const parcelGrams = parcelWeight(items);
+  const onlyBonusItems = items.length > 0 && items.every((item) => item.requiresPurchase);
+  const validPostalCode = isValidPostalCode(country, postalCode);
+  const quote = validPostalCode
+    ? calculateShipping({
+        countryCode: country,
+        province: isArgentina ? province : undefined,
+        weightGrams: parcelGrams,
+        subtotal,
+      })
+    : null;
+  const shipping = quote?.cost ?? null;
   const missingForFreeShipping = Math.max(0, shippingSettings.freeShippingFrom - subtotal);
   const freeShippingProgress = Math.min(100, (subtotal / shippingSettings.freeShippingFrom) * 100);
 
@@ -123,27 +95,49 @@ export default function CartPage() {
     }
   }
 
+  function postalErrorFor(countryCode: string, value: string): string {
+    if (!value || isValidPostalCode(countryCode, value)) return '';
+    return countryCode === 'AR'
+      ? 'Ingresá un CP de 4 dígitos o un CPA válido (por ejemplo, C1000ABC).'
+      : 'Ingresá un código postal válido (3 a 12 letras, números o guiones).';
+  }
+
   function handlePostalCodeChange(value: string) {
-    const normalized = normalizePostalCode(value);
+    const normalized = isArgentina ? normalizePostalCode(value) : value.toUpperCase();
     setPostalCode(normalized);
-    setPostalError(
-      normalized && !isValidArgentinePostalCode(normalized)
-        ? 'Ingresá un CP de 4 dígitos o un CPA válido (por ejemplo, C1000ABC).'
-        : '',
-    );
+    setPostalError(postalErrorFor(country, normalized));
+    setSummary(null);
+  }
+
+  function handleCountryChange(code: string) {
+    setCountry(code);
+    setProvince('');
+    setPostalError(postalErrorFor(code, postalCode));
     setSummary(null);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!validPostalCode || shipping === null) {
-      setPostalError('Ingresá un código postal válido para calcular el envío.');
+    setFormError('');
+
+    if (onlyBonusItems) {
+      setFormError('El set de descanso se suma a una compra: agregá otro producto para continuar.');
+      return;
+    }
+    if (!validPostalCode || !quote) {
+      setPostalError(
+        !validPostalCode
+          ? 'Ingresá un código postal válido para calcular el envío.'
+          : 'Elegí tu provincia para calcular el envío.',
+      );
       postalCodeInput.current?.focus();
       return;
     }
 
     const formData = new FormData(event.currentTarget);
-    setSummary({
+    const order: StoredOrder = {
+      number: generateOrderNumber(),
+      createdAt: new Date().toISOString(),
       customer: {
         name: String(formData.get('name') ?? ''),
         email: String(formData.get('email') ?? ''),
@@ -152,14 +146,17 @@ export default function CartPage() {
         streetNumber: String(formData.get('streetNumber') ?? ''),
         apartment: String(formData.get('apartment') ?? ''),
         city: String(formData.get('city') ?? ''),
-        province: String(formData.get('province') ?? ''),
+        province: isArgentina ? province : String(formData.get('province') ?? ''),
+        countryCode: country,
         postalCode,
       },
       items: [...items],
       subtotal,
-      shipping,
-      total: subtotal + shipping,
-    });
+      shipping: quote.cost,
+      total: subtotal + quote.cost,
+    };
+    saveOrder(order);
+    setSummary(order);
   }
 
   if (items.length === 0) {
@@ -177,6 +174,15 @@ export default function CartPage() {
     );
   }
 
+  const statusText = postalError
+    || (isArgentina && !province
+      ? 'Elegí tu provincia para calcular el envío.'
+      : !validPostalCode
+        ? 'Ingresá tu código postal para calcular el envío.'
+        : quote
+          ? `${quote.zoneLabel} · paquete de ${quote.parcelGrams} g: ${quote.free ? 'envío gratis' : formatCurrency(quote.cost)}`
+          : 'No pudimos calcular el envío para este destino.');
+
   return (
     <div className="page cart-page">
       <header className="cart-heading">
@@ -189,14 +195,20 @@ export default function CartPage() {
       <div className="cart-layout">
         <section className="cart-items" aria-label="Productos en el carrito">
           <div className="free-shipping">
-            <p>
-              {missingForFreeShipping > 0
-                ? `Te faltan ${formatCurrency(missingForFreeShipping)} para el envío gratis.`
-                : '¡Tenés envío gratis!'}
-            </p>
-            <div className="free-shipping__bar" aria-hidden="true">
-              <span style={{ width: `${freeShippingProgress}%` }} />
-            </div>
+            {isArgentina ? (
+              <>
+                <p>
+                  {missingForFreeShipping > 0
+                    ? `Te faltan ${formatCurrency(missingForFreeShipping)} para el envío gratis.`
+                    : '¡Tenés envío gratis!'}
+                </p>
+                <div className="free-shipping__bar" aria-hidden="true">
+                  <span style={{ width: `${freeShippingProgress}%` }} />
+                </div>
+              </>
+            ) : (
+              <p>El envío gratis aplica solo a compras dentro de Argentina.</p>
+            )}
           </div>
           {items.map((item) => (
             <article className="cart-item" key={item.id}>
@@ -205,11 +217,7 @@ export default function CartPage() {
                 <h2>{item.name}</h2>
                 <p>{formatCurrency(item.unitPrice)} c/u</p>
                 <div className="cart-item__controls">
-                  <div
-                    className="quantity-control"
-                    role="group"
-                    aria-label={`Cantidad de ${item.name}`}
-                  >
+                  <div className="quantity-control" role="group" aria-label={`Cantidad de ${item.name}`}>
                     <button
                       type="button"
                       aria-label={`Quitar una unidad de ${item.name}`}
@@ -245,9 +253,7 @@ export default function CartPage() {
                   </button>
                 </div>
               </div>
-              <p className="cart-item__total">
-                {formatCurrency(item.unitPrice * item.quantity)}
-              </p>
+              <p className="cart-item__total">{formatCurrency(item.unitPrice * item.quantity)}</p>
             </article>
           ))}
           <button
@@ -270,7 +276,7 @@ export default function CartPage() {
         <section className="delivery-panel">
           <h2>Datos de envío</h2>
           <p className="delivery-origin">
-            Origen del despacho: Laborde, Córdoba (CP {shippingSettings.originPostalCode}).
+            Origen del despacho: {shippingSettings.originLabel} (CP {shippingSettings.originPostalCode}).
           </p>
 
           <form className="delivery-form" onSubmit={handleSubmit} onChange={() => setSummary(null)}>
@@ -288,6 +294,20 @@ export default function CartPage() {
                 <input name="phone" type="tel" autoComplete="tel" required />
               </label>
             </div>
+            <label>
+              País
+              <select
+                name="country"
+                autoComplete="country"
+                value={country}
+                onChange={(event) => handleCountryChange(event.target.value)}
+                required
+              >
+                {countries.map((item) => (
+                  <option key={item.code} value={item.code}>{item.name}</option>
+                ))}
+              </select>
+            </label>
             <div className="delivery-form__row delivery-form__address">
               <label>
                 Calle
@@ -299,7 +319,7 @@ export default function CartPage() {
               </label>
             </div>
             <label>
-              Piso, departamento u otra referencia <span>(opcional)</span>
+              <span className="label-text">Piso, departamento u otra referencia <em>(opcional)</em></span>
               <input name="apartment" autoComplete="address-line2" />
             </label>
             <div className="delivery-form__row">
@@ -307,15 +327,31 @@ export default function CartPage() {
                 Localidad
                 <input name="city" autoComplete="address-level2" required />
               </label>
-              <label>
-                Provincia
-                <select name="province" autoComplete="address-level1" defaultValue="" required>
-                  <option value="" disabled>Elegí una provincia</option>
-                  {provinces.map((province) => (
-                    <option key={province} value={province}>{province}</option>
-                  ))}
-                </select>
-              </label>
+              {isArgentina ? (
+                <label>
+                  Provincia
+                  <select
+                    name="province"
+                    autoComplete="address-level1"
+                    value={province}
+                    onChange={(event) => {
+                      setProvince(event.target.value);
+                      setPostalError('');
+                    }}
+                    required
+                  >
+                    <option value="" disabled>Elegí una provincia</option>
+                    {provinces.map((item) => (
+                      <option key={item.name} value={item.name}>{item.name}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <label>
+                  Estado / región
+                  <input name="province" autoComplete="address-level1" required />
+                </label>
+              )}
             </div>
             <label className="postal-code-field">
               Código postal
@@ -324,15 +360,16 @@ export default function CartPage() {
                 name="postalCode"
                 autoComplete="postal-code"
                 value={postalCode}
-                maxLength={9}
-                pattern="(?:[0-9]{4}|[A-Za-z][0-9]{4}[A-Za-z]{3})"
+                maxLength={isArgentina ? 9 : 12}
                 aria-describedby="postal-code-help postal-code-error"
                 onChange={(event) => handlePostalCodeChange(event.target.value)}
                 required
               />
             </label>
             <p className="postal-code-help" id="postal-code-help">
-              Aceptamos CP de 4 dígitos o CPA alfanumérico.
+              {isArgentina
+                ? 'Aceptamos CP de 4 dígitos o CPA alfanumérico.'
+                : 'Ingresá el código postal de tu país.'}
             </p>
             <p
               className={`postal-code-status${postalError ? ' has-error' : ''}`}
@@ -340,34 +377,32 @@ export default function CartPage() {
               role="status"
               aria-live="polite"
             >
-              {postalError ||
-                (validPostalCode
-                  ? shipping === 0
-                    ? 'Envío gratis en este pedido.'
-                    : `Envío a todo el país: ${formatCurrency(shippingSettings.flatRate)}`
-                  : 'Ingresá tu CP para calcular el envío.')}
+              {statusText}
             </p>
 
             <div className="cart-totals" aria-live="polite">
               <p><span>Subtotal</span><strong>{formatCurrency(subtotal)}</strong></p>
               <p>
-                <span>Envío</span>
+                <span>Envío{quote ? ` (${quote.zoneLabel})` : ''}</span>
                 <strong>{shipping === null ? 'A calcular' : shipping === 0 ? 'Gratis' : formatCurrency(shipping)}</strong>
               </p>
               <p className="cart-totals__grand">
                 <span>Total</span>
-                <strong>
-                  {shipping === null
-                    ? 'A calcular'
-                    : formatCurrency(subtotal + shipping)}
-                </strong>
+                <strong>{shipping === null ? 'A calcular' : formatCurrency(subtotal + shipping)}</strong>
               </p>
             </div>
 
             <p className="shipping-rate-notice">
-              El envío tiene una tarifa fija de {formatCurrency(shippingSettings.flatRate)} a todo el país
-              {' '}y es gratis desde {formatCurrency(shippingSettings.freeShippingFrom)}.
+              El costo depende del destino y del peso del paquete ({parcelGrams} g con embalaje).
+              {isArgentina
+                ? ` Gratis en Argentina desde ${formatCurrency(shippingSettings.freeShippingFrom)}.`
+                : ' Los envíos internacionales no incluyen impuestos ni aranceles de aduana del país de destino.'}
             </p>
+            {(formError || onlyBonusItems) && (
+              <p className="form-error" role="alert">
+                {formError || 'El set de descanso se suma a una compra: agregá otro producto para continuar.'}
+              </p>
+            )}
             <button className="btn btn--primary" type="submit">
               Generar resumen del pedido
             </button>
@@ -376,9 +411,14 @@ export default function CartPage() {
           {summary && (
             <section className="order-summary" aria-live="polite" ref={summaryRef} tabIndex={-1}>
               <h2>Resumen del pedido</h2>
+              <p className="order-number">
+                Número de pedido <strong>{summary.number}</strong>
+              </p>
               <p className="order-summary__notice">
-                Revisá los datos y enviá el pedido por WhatsApp: se abre la conversación con el pedido
-                ya escrito. El pedido no queda confirmado hasta que Cosmo te responda.
+                Guardá este número: lo vas a necesitar si querés{' '}
+                <Link to="/devoluciones">pedir una devolución</Link>. Enviá el pedido por WhatsApp: se
+                abre la conversación con todo ya escrito. El pedido no queda confirmado hasta que Cosmo
+                te responda.
               </p>
               <ul>
                 {summary.items.map((item) => (
@@ -401,7 +441,7 @@ export default function CartPage() {
                 {summary.customer.street} {summary.customer.streetNumber}
                 {summary.customer.apartment && <><br />{summary.customer.apartment}</>}<br />
                 {summary.customer.city}, {summary.customer.province}<br />
-                CP {summary.customer.postalCode}<br />
+                CP {summary.customer.postalCode} · {countryName(summary.customer.countryCode)}<br />
                 {summary.customer.phone}<br />
                 {summary.customer.email}
               </address>
